@@ -1,0 +1,79 @@
+networks:
+    crawler-service-db:
+        name: crawler-service-db
+    micro-services:
+        name: micro-service-network
+services:
+    db:
+        container_name: crawler-service-db
+        environment:
+            MYSQL_DATABASE: crawler
+            MYSQL_PASSWORD: pass
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_USER: user
+        hostname: crawler-service-db
+        image: mysql:5.7.31
+        networks:
+            default: {}
+            crawler-service-db:
+                aliases:
+                    - crawler-service-db
+        ports:
+            - published: 33321
+              target: 3306
+        volumes:
+            - mysql:/var/lib/mysql:rw
+    main:
+        container_name: crawler-service-php
+        hostname: crawler-service-php
+        build:
+            args:
+                COMPOSER_URL: https://getcomposer.org/composer-1.phar
+            context: .docker/php
+        environment:
+            PHP_IDE_CONFIG: serverName=crawler-service
+            SERVER_ROOT: /home/app/public
+            SSH_AUTH_SOCK: "${SSH_AUTH_SOCK}"
+            # XDEBUG Settings
+            XDEBUG_CONFIG: "cli_color=1 client_host=${WSL_HOST:-host.docker.internal} client_port=9003 idekey=PHPSTORM"
+            XDEBUG_MODE: develop,debug,trace,coverage
+        extra_hosts:
+            - host.docker.internal:host-gateway
+        networks:
+            default: {}
+            micro-services:
+                aliases:
+                    - crawler-service-php
+        ports:
+            - published: 8095
+              target: 80
+        volumes:
+            - ./:/home/app:rw
+            - "${HOME}/.config/composer/auth.json:/root/.composer/auth.json:ro"
+            - /etc/ssl/certs:/etc/ssl/certs:ro
+            - .docker/apache/php.conf:/etc/apache2/sites-enabled/000-default.conf:rw
+            - .docker/php/php.ini:/usr/local/etc/php/php.ini:rw
+            - "${SSH_AUTH_SOCK:-/tmp/no_ssh_agent}:${SSH_AUTH_SOCK:-/tmp/no_ssh_agent}"
+        working_dir: /home/app
+        command:
+            - /bin/bash
+            - '-c'
+            - |
+                if [ ! -f /home/app/.env ]; then
+                    cp /home/app/.env.example /home/app/.env
+                fi
+
+                while ! mysqladmin ping -hdb -uroot -proot --silent; do
+                    sleep 1
+                done
+
+                ## Take ownership of the logs directories in the container
+                chmod -R 0777 storage/logs/
+                chown -R root:root storage/logs/
+
+                composer install && \
+                php artisan migrate && \
+                apache2-foreground
+version: '3.5'
+volumes:
+    mysql: {}
