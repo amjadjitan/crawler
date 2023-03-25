@@ -7,7 +7,7 @@ use App\Http\Controllers\CrawlSites;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
-|--------------------------------------------------------------------------
+|---------------------------------------------------------------------------
 |
 | Here is where you can register web routes for your application. These
 | routes are loaded by the RouteServiceProvider within a group which
@@ -20,5 +20,5 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/crawl-site', [CrawlSites::class, 'siteCrawlReport']);//->name('crawlSites.index');
+Route::get('/crawl-site', [CrawlSites::class, 'siteCrawlReport']);
 

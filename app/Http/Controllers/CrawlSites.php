@@ -11,16 +11,16 @@ use Log;
 class CrawlSites extends Controller
 {
     /**
-     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function siteCrawlReport(Request $request)
     {
         $siteUrl = $request->get("url");
-        $numberOfPagesToCrawl = 6;//default
-        $siteParser = new SiteCrawlReportsJob();
-        $siteParser->getCrawlingReport($siteUrl, $numberOfPagesToCrawl);
+        $numberOfPagesToCrawl = 6;//default.....
+        $siteCrawler = new SiteCrawlReportsJob();
 
         Log::info("SiteCrawlerReports request", ["jobName" => "SiteCrawlReportsJob"]);
-        return response()->json($siteParser->getCrawlingReport($siteUrl, $numberOfPagesToCrawl));
+        return response()->view('siteCrawlingReport', $siteCrawler->getReport($siteUrl, $numberOfPagesToCrawl));
     }
 }

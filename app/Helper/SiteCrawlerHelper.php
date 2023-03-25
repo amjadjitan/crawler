@@ -4,6 +4,8 @@ namespace App\Helper;
 
 use App\Http\Client\GuzzleWrapper;
 use App\Logging\MonologCustomizer;
+use DOMDocument;
+use DOMElement;
 use Log;
 
 class  SiteCrawlerHelper
@@ -15,35 +17,85 @@ class  SiteCrawlerHelper
     private $page = [];
     private $crawlingInProgress = false;
 
-    public function __construct($mainUrl, $depth = 5)
+    /**
+     * @param $mainUrl
+     * @param $depth
+     */
+    public function __construct($mainUrl, $depth)
     {
         $this->mainUrl = $mainUrl;
-        $this->depth = $depth;
+        $this->depth = $depth;//#pagesToCrawl
         $parse = parse_url($mainUrl);
-        $this->host = $parse['host'] ?? $parse['path'];//to be fixed
+        $this->host = $parse['host'] ?? $parse['path'];
     }
 
-    private function ProcessPage($content, $url, $depth)
+    /**
+     * @param string $content
+     * @param string $url
+     * @return void
+     */
+    private function ProcessPage(string $content, string $url): void
     {
-        $dom = new \DOMDocument('1.0');
+        $dom = new DOMDocument('1.0');
         @$dom->loadHTML($content);
 
-        //extract images
-        $imgs = $dom->getElementsByTagName('img');
-        foreach ($imgs as $element) {
-            $this->page[$url]['imgs'][] = $element->getAttribute('src');
-        }
-        $this->pageImgsCleaner($url);
+        $this->extractImages($dom, $url);
+        $this->extractTitle($dom, $url);
+        $this->extractWords($dom, $url);
+        $this->extractAnchors($dom, $url);
+    }
 
-        //extract title
+    /**
+     * @param DOMDocument $dom
+     * @param string $url
+     * @return void
+     */
+    private function extractImages(DOMDocument $dom, string $url): void
+    {
+        $images = $dom->getElementsByTagName('img');
+        foreach ($images as $element) {
+            $this->page[$url]['images'][] = $element->getAttribute('src');
+        }
+        if(!empty($this->page[$url]['images'])){
+            $this->pageImagesCleaner($url);
+        }
+    }
+
+    /**
+     * @param string $url
+     * @return void
+     */
+    private function pageImagesCleaner(string $url): void
+    {
+        foreach ($this->page[$url]['images'] as $index => $image) {
+            $image = preg_replace('/(?:\?|\&)(?<key>[w,q]+)(?:\=|\&?)(?<value>[0-9+,.-]*)/', '', $image);
+            $this->page[$url]['images'][$index] = $image;
+        }
+    }
+
+    /**
+     * @param DOMDocument $dom
+     * @param string $url
+     * @return void
+     */
+    private function extractTitle(DOMDocument $dom, string $url): void
+    {
         $titleText = '';
         $title = $dom->getElementsByTagName('title');
         if ($title->length > 0) {
             $titleText = $title->item(0)->textContent;
         }
         $this->page[$url]['title'] = $titleText;
+    }
 
-        //extract word from page body
+    /**
+     * @param DOMDocument $dom
+     * @param string $url
+     * @return void
+     */
+    private function extractWords(DOMDocument $dom, string $url): void
+    {
+        //needs more work
         $nodeList = $dom->getElementsByTagName('body');
         foreach ($nodeList as $node) {
             if ($node->hasChildNodes()) {
@@ -51,69 +103,81 @@ class  SiteCrawlerHelper
             }
         }
         $this->pageWordsCleaner($url);
+    }
 
-        // process anchors
+    /**
+     * @param DOMDocument $dom
+     * @param string $url
+     * @return void
+     */
+    private function extractAnchors(DOMDocument $dom, string $url): void
+    {
         $anchors = $dom->getElementsByTagName('a');
         foreach ($anchors as $element) {
             if (!empty($element->getAttribute('href')) && $this->filterLinks($element->getAttribute('href'))) {
                 $this->page[$url]['links'][] = $element->getAttribute('href');
                 if (!$this->isExternal($element->getAttribute('href'), $this->mainUrl) && $this->depth > 0) {
-                    $this->depth -= 1;
                     $this->crawlPage($this->buildSubPageUrl($element->getAttribute('href')), $this->depth);
                 }
             }
         }
     }
 
-    private function getContent($url)
+    /**
+     * @param string $url
+     * @return array
+     */
+    private function getContent(string $url): array
     {
-        $raw = GuzzleWrapper::get($url, [], ['Host' => $url]);
         //processing time handling https://stackoverflow.com/questions/31341254/guzzle-6-get-request-total-time
+        $raw = GuzzleWrapper::get($url, [], ['Host' => $url]);
         $contents = isset($raw['body']) ? $raw['body']->getContents() : $raw['errorBody'];
         return [$contents, $raw['response'], $raw['execTime']];
     }
 
-    protected function printResult($url, $depth, $httpcode, $time)
+    /**
+     * @param string $url
+     * @param int $depth
+     * @return bool
+     */
+    private function isValid(string $url, int $depth)
     {
-        ob_end_flush();
-        $currentDepth = $depth;
-        $count = count($this->seen);
-        echo "N::$count,CODE::$httpcode,TIME::$time,DEPTH::$currentDepth URL::$url <br>";
-        ob_start();
-        flush();
-    }
-
-    private function isValid($url, $depth)
-    {
-        if (strpos($url, $this->host) === false || $depth === 0 || isset($this->seen[$url])) {
+        if ($depth === 0 || isset($this->seen[$url])) {
             return false;
         }
         return true;
     }
 
-    private function crawlPage($url, $depth)
+    /**
+     * @param string $url
+     * @param int $depth
+     * @return void
+     */
+    private function crawlPage(string $url, int $depth): void
     {
         if (!$this->isValid($url, $depth)) {
             return;
         }
+        $this->depth -= 1;
         $this->crawlingInProgress = true;
-        // add to the seen URL
         $this->seen[$url] = true;
-        // get Content and Return Code
+
         list($content, $httpcode, $time) = $this->getContent($url);
+
         $this->page[$url]['responseCode'] = $httpcode;
         $this->page[$url]['execTime'] = $time;
-        // print Result for current Page
-        // $this->printResult($url, $depth, $httpcode, $time);
 
         if ($httpcode == 200) {
-            // process subPages
-            $this->ProcessPage($content, $url, $depth);
+            $this->ProcessPage($content, $url);
         }
+
         $this->crawlingInProgress = false;
     }
 
-    public function run()
+    /**
+     * @return array
+     */
+    public function run(): array
     {
         $this->crawlPage($this->mainUrl, $this->depth);
         do {
@@ -122,15 +186,25 @@ class  SiteCrawlerHelper
         return $this->page;
     }
 
-    public function isExternal($url, $mainUrl)
+    /**
+     * @param string $url
+     * @param string $mainUrl
+     * @return bool
+     */
+    public function isExternal(string $url, string $mainUrl): bool
     {
         $components = parse_url($url);
-        if (empty($components['host'])) return false;  // we will treat url like '/relative.php' as relative
-        if (strcasecmp($components['host'], $mainUrl) === 0) return false; // url host looks exactly like the local host
-        return strrpos(strtolower($components['host']), '.' . $mainUrl) !== strlen($components['host']) - strlen('.' . $mainUrl); // check if the url host is a subdomain
+        if (empty($components['host'])) return false;
+        if (strcasecmp($components['host'], $mainUrl) === 0) return false;
+        return strrpos(strtolower($components['host']), '.' . $mainUrl) !== strlen($components['host']) - strlen('.' . $mainUrl);
     }
 
-    private function getDOMNodeText(\DOMElement $domNode, string $url)
+    /**
+     * @param DOMElement $domNode
+     * @param string $url
+     * @return void
+     */
+    private function getDOMNodeText(DOMElement $domNode, string $url): void
     {
         foreach ($domNode->childNodes as $node) {
             if (!empty($node->textContent)) {
@@ -143,7 +217,11 @@ class  SiteCrawlerHelper
         }
     }
 
-    private function filterLinks($url)
+    /**
+     * @param string $url
+     * @return bool
+     */
+    private function filterLinks(string $url): bool
     {
         if (strpos($url, "#") === 0) {
             return false;
@@ -154,13 +232,20 @@ class  SiteCrawlerHelper
         return true;
     }
 
-    private function buildSubPageUrl($subUrl)
+    /**
+     * @param string $subUrl
+     * @return string
+     */
+    private function buildSubPageUrl(string $subUrl): string
     {
-        $hash = rand();
-        return 'https://' . $this->mainUrl . $subUrl . '?hash=' . $hash;
+        return $this->mainUrl . $subUrl;
     }
 
-    private function pageWordsCleaner(string $url)
+    /**
+     * @param string $url
+     * @return void
+     */
+    private function pageWordsCleaner(string $url): void
     {
         $currentText = '';
         foreach ($this->page[$url]['textBlocks'] as $index => $text) {
@@ -175,15 +260,11 @@ class  SiteCrawlerHelper
         }
     }
 
-    private function pageImgsCleaner(string $url)
-    {
-        foreach ($this->page[$url]['imgs'] as $index => $img) {
-            $img = preg_replace('/(?:\?|\&)(?<key>[w,q]+)(?:\=|\&?)(?<value>[0-9+,.-]*)/', '', $img);
-            $this->page[$url]['imgs'][$index] = $img;
-        }
-    }
-
-    private function isJson($string)
+    /**
+     * @param string $string
+     * @return bool
+     */
+    private function isJson(string $string): bool
     {
         json_decode($string);
         return json_last_error() === JSON_ERROR_NONE;

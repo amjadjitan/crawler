@@ -9,18 +9,24 @@ class SiteReports
     private $siteEntryURL = '';
     private $numberOfPagesToCrawl;
     private $siteCrawlerHelper;
-
     private $pagesData = [];
 
-    public function __construct(string $siteEntryURL, $numberOfPagesToCrawl)//here
+    /**
+     * @param string $siteEntryURL
+     * @param int $numberOfPagesToCrawl
+     */
+    public function __construct(string $siteEntryURL, int $numberOfPagesToCrawl)
     {
         $this->siteEntryURL = $siteEntryURL;
         $this->numberOfPagesToCrawl = $numberOfPagesToCrawl;
-        $this->siteCrawlerHelper = new SiteCrawlerHelper($siteEntryURL, $this->numberOfPagesToCrawl);
+        $this->siteCrawlerHelper = new SiteCrawlerHelper($siteEntryURL, $numberOfPagesToCrawl);
         $this->pagesData = $this->siteCrawlerHelper->run();
     }
 
-    public function getNumberOfPagesCrawled()
+    /**
+     * @return int
+     */
+    public function getNumberOfPagesCrawled(): int
     {
         $crawledPages = 0;
         foreach ($this->pagesData as $pageData) {
@@ -31,21 +37,26 @@ class SiteReports
         return $crawledPages;
     }
 
-    public function getNumberOfUniqueImages()
+    /**
+     * @return int
+     */
+    public function getNumberOfUniqueImages(): int
     {
         $totalImages = [];
         foreach ($this->pagesData as $pageData) {
-            if (isset($pageData['imgs'])) {
-                $totalImages[] = array_merge($totalImages, $pageData['imgs']);
+            if (isset($pageData['images'])) {
+                $totalImages = array_merge($totalImages, $pageData['images']);
             }
         }
         return count(array_unique($totalImages));
     }
 
-    public function getNumberOfUniqueInternalLinks()
+    /**
+     * @return int
+     */
+    public function getNumberOfUniqueInternalLinks(): int
     {
         $totalUniqueInternalLinks = [];
-        $totalUniqueExternalLinks = [];
         foreach ($this->pagesData as $pageData) {
             if (isset($pageData['links'])) {
                 foreach ($pageData['links'] as $link) {
@@ -58,7 +69,10 @@ class SiteReports
         return count(array_unique($totalUniqueInternalLinks));
     }
 
-    public function getNumberOfUniqueExternalLinks()
+    /**
+     * @return int
+     */
+    public function getNumberOfUniqueExternalLinks(): int
     {
         $totalUniqueExternalLinks = [];
         foreach ($this->pagesData as $pageData) {
@@ -73,7 +87,11 @@ class SiteReports
         return count(array_unique($totalUniqueExternalLinks));
     }
 
-    public function getAveragePageLoadInSeconds(int $numberOfPagesCrawled)
+    /**
+     * @param int $numberOfPagesCrawled
+     * @return float
+     */
+    public function getAveragePageLoadInSeconds(int $numberOfPagesCrawled): float
     {
         $totalPagesLoadInSeconds = 0;
         foreach ($this->pagesData as $pageData) {
@@ -81,10 +99,14 @@ class SiteReports
                 $totalPagesLoadInSeconds += $pageData['execTime'];
             }
         }
-        return round($totalPagesLoadInSeconds / $numberOfPagesCrawled, 1);
+        return round($totalPagesLoadInSeconds / $numberOfPagesCrawled, 3);
     }
 
-    public function getAverageWordCount(int $numberOfPagesCrawled)
+    /**
+     * @param int $numberOfPagesCrawled
+     * @return float
+     */
+    public function getAverageWordCount(int $numberOfPagesCrawled): float
     {
         $totalWordsCount = 0;
         foreach ($this->pagesData as $pageData) {
@@ -97,7 +119,11 @@ class SiteReports
         return round($totalWordsCount / $numberOfPagesCrawled, 1);
     }
 
-    public function getAverageTitleLength(int $numberOfPagesCrawled)
+    /**
+     * @param int $numberOfPagesCrawled
+     * @return float
+     */
+    public function getAverageTitleLength(int $numberOfPagesCrawled): float
     {
         $totalTitleLength = 0;
         foreach ($this->pagesData as $pageData) {
@@ -108,7 +134,10 @@ class SiteReports
         return round($totalTitleLength / $numberOfPagesCrawled, 1);
     }
 
-    public function summaryOfPagesCrawled()
+    /**
+     * @return array
+     */
+    public function summaryOfPagesCrawled(): array
     {
         $summary = [];
         foreach ($this->pagesData as $sitUrl => $pageData) {

@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\RetryMiddleware;
+use Log;
 
 class Http
 {
@@ -32,10 +33,11 @@ class Http
 
             // Retry connection exceptions
             if ($exception) {
-                /* Logger::logWithTempProcessor("NETWORK_ERROR_RETRYING", fn(array $x): array => $x + [
-                   "source" => "guzzle",
-                   "error" => $exception instanceof \Exception ? $exception->getMessage() : "N/A"
-                 ], Logger::WARNING);*/
+                Log::error("NETWORK_ERROR_RETRYING", [
+                        "source" => get_class(),
+                        "errorMessage" => $exception instanceof \Exception ? $exception->getMessage() : "N/A",
+                    ]
+                );
                 return true;
             }
 

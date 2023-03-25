@@ -39,12 +39,12 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             Log::getLogger()->pushProcessor(
                 function ($record) {
-                    $record["context"]["siteCrawler"]["name"] = get_class($this);
+                    $record["context"]["crawler"]["name"] = get_class($this);
                     return $record;
                 }
             );
 
-            Log::critical("SiteCrawler service General exception", [
+            Log::critical("Crawler service General exception", [
                 "error" => $e->getMessage(),
                 "message" => $e->getTraceAsString()
             ]);

@@ -3,6 +3,7 @@
 namespace App\Http\Client;
 
 use Exception;
+use Log;
 
 class GuzzleWrapper
 {
@@ -16,15 +17,9 @@ class GuzzleWrapper
      */
     public static function get(string $url, array $payload = [], array $headers = [], array $options = [])
     {
-        if(!isset($headers["Host"])){
-            $headers["Host"] = $_SERVER['HTTP_HOST'];
-        }
-    /**/
-        $headers["Cache-Control"] = 'no-cache';
+        $headers["Host"] = $_SERVER['HTTP_HOST'];
+        $headers["User-Agent"] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.53 Safari/537.36';
 
-        //$headers["User-Agent"] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.53 Safari/537.36';
-        $headers["User-Agent"] = 'PostmanRuntime/7.31.3';
-    /**/
         $start_time = microtime(true);
         try {
             $response = Http::client(["base_uri" => $url])->request("GET", "", [
@@ -32,7 +27,14 @@ class GuzzleWrapper
                 "allow_redirects" => true,
                 "query" => $payload,
             ]);
-        } catch(\Throwable $e){
+        } catch (\Throwable $e) {
+            Log::error("guzzleWrapper request failed", [
+                    "message" => $e->getMessage(),
+                    "responseCode" => $e->getCode(),
+                    "trace" => $e->getTraceAsString()
+                ]
+            );
+
             $execution_time = microtime(true) - $start_time;
             return ['errorBody' => $e->getMessage(), 'response' => $e->getCode(), 'execTime' => $execution_time];
         }
